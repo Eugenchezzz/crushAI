@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Neural Network Predictor</title>
+    <link rel="stylesheet" href="index.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Neural Network Predictor</h1>
+      <div class="data-container">
+        <h2>Последние 15 значений:</h2>
+        <div id="values" class="values"></div>
+      </div>
+      <div class="prediction-container">
+        <h2>Предсказанное следующее значение:</h2>
+        <div id="prediction" class="prediction">-</div>
+      </div>
+    </div>
+    <script>
+      const { ipcRenderer } = require('electron');
+
+      async function updateData() {
+        const result = await ipcRenderer.invoke('get-prediction');
+        
+        if (result.error) {
+          console.error(result.error);
+          return;
+        }
+
+        const valuesElement = document.getElementById('values');
+        valuesElement.innerHTML = result.lastValues
+          .map(value => `<div class="value">${value.toFixed(2)}</div>`)
+          .join('');
+
+        const predictionElement = document.getElementById('prediction');
+        predictionElement.textContent = result.prediction.toFixed(2);
+      }
+
+      // Обновляем данные каждые 5 секунд
+      setInterval(updateData, 5000);
+      updateData();
+    </script>
+  </body>
+</html>
