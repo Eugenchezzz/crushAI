@@ -28,8 +28,6 @@ function createWindow() {
 
   // Open the DevTools.
   mainWindow.webContents.openDevTools();
-
-  neuralNetwork = new NeuralNetworkManager();
 }
 
 // This method will be called when Electron has finished
@@ -37,6 +35,7 @@ function createWindow() {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   createWindow();
+  neuralNetwork = new NeuralNetworkManager();
 
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
@@ -61,28 +60,43 @@ app.on('window-all-closed', () => {
 
 // Обработчик для получения последних значений и предсказания
 ipcMain.handle('get-prediction', async () => {
-  try {
-    const data = await fs.readFile(path.join(__dirname, 'data.csv'), 'utf-8');
-    const records = parse(data, {
-      columns: true,
-      skip_empty_lines: true
-    });
-    
-    const values = records.map(record => parseFloat(record.value));
-    const lastValues = values.slice(-15);
-    
-    if (values.length > 3) { // Нужно минимум 3 значения для предсказания
-      await neuralNetwork.train(values);
+    try {
+        const data = await fs.readFile(path.join(__dirname, 'data.csv'), 'utf-8');
+        const records = parse(data, {
+            columns: true,
+            skip_empty_lines: true
+        });
+        
+        const values = records.map(record => parseFloat(record.value)).filter(v => !isNaN(v));
+        const lastValues = values.slice(-15);
+        
+        // Обучаем только если есть новые данные
+        if (values.length > neuralNetwork.lastDataLength) {
+            await neuralNetwork.train(values);
+        }
+        
+        const predictions = [];
+        if (lastValues.length > 0) {
+            for (let i = 0; i < lastValues.length; i++) {
+                const prediction = neuralNetwork.predict(lastValues.slice(0, i + 1));
+                predictions.push(prediction);
+            }
+        }
+        
+        const nextPrediction = neuralNetwork.predict(lastValues);
+        
+        return {
+            lastValues,
+            predictions,
+            prediction: nextPrediction
+        };
+    } catch (error) {
+        console.error('Error:', error);
+        return { 
+            lastValues: [],
+            predictions: [],
+            prediction: 0,
+            error: error.message 
+        };
     }
-    
-    const prediction = neuralNetwork.predict(lastValues);
-    
-    return {
-      lastValues,
-      prediction: prediction !== null ? prediction : 0
-    };
-  } catch (error) {
-    console.error('Error:', error);
-    return { error: error.message };
-  }
 });
